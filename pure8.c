@@ -121,7 +121,7 @@ int main(int argc, char* argv[])
 					fprintf(debug_file, "\n>>> HALT at RAM address %X\n", pure8.pc);
 				#endif
 				
-				run = false;
+				run = 0;
 				break;
 				
 			case MOV:
