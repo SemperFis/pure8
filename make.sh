@@ -8,6 +8,7 @@ then
 	echo "-h : print this help screen"
 	echo "-d : compile with debug activate"
 	echo "-r : compile a release version of the source"
+	echo "-c : clean the compile directory"
 elif [ "$1" = "-d" ]
 then
 	rm debug.txt
@@ -18,6 +19,10 @@ then
 	rm debug.txt
 	rm pure8
 	tcc -Wall pure8.c -o pure8
+elif [ "$1" = "-c" ]
+then
+	rm debug.txt
+	rm pure8
 else
 	echo "Error : unknown syntax or no options"
 	echo "Type : ./make.sh -h to get the help"
