@@ -39,11 +39,11 @@ typedef struct {
 
 /* Store the instructions into an Enum to ease the code reading */
 enum intruction_list {
-	/* HALT : stop the cpu until reset */
+	/* HALT : halt the cpu until reset */
 	HALT = 0xFF,
 	
-	/* MOV : move an immediate value, a register or a memory address to a register or a memory address */
-	MOV = 0x01
+	/* LOAD : load an immediate value into a register or copy the content of a register into another register */
+	LOAD = 0x01
 };
 
 
@@ -124,8 +124,8 @@ int main(int argc, char* argv[])
 				run = 0;
 				break;
 				
-			case MOV:
-				/* MOV [DEST] [SRC] | Example : LOAD M0, #0xFF, LOAD R5, M0 */
+			case LOAD:
+				/* LOAD [DEST] [SRC] | Example : LOAD M0, #0xFF, LOAD R5, M0 */
 				/* ENCODING : 0x01[CONF][DEST][SRC] */
 				
 				conf = pure8.mem[++pure8.pc];
@@ -133,15 +133,12 @@ int main(int argc, char* argv[])
 				src  = pure8.mem[++pure8.pc];
 				
 				#ifdef DEBUG
-					fprintf(debug_file, "\n>>> MOV at RAM address %X : CONF : %X; DEST : %X; SRC : %X;\n", (int)pure8.pc, (int)conf, (int)dest, (int)src);
+					fprintf(debug_file, "\n>>> LOAD at RAM address %X : CONF : %X; DEST : %X; SRC : %X;\n", (int)pure8.pc, (int)conf, (int)dest, (int)src);
 				#endif
 				
 				/* CONF(iguration) BYTE : 
 				 * 0x10 -> DEST = REG, SRC = IMM,
 				 * 0x11 -> DEST = REG, SRC = REG,
-				 * 0x12 -> DEST = REG, SRC = MEM,
-				 * 0x21 -> DEST = MEM, SRC = REG,
-				 * 0x20 -> DEST = MEM, SRC = IMM
 				 */
 				
 				switch (conf)
@@ -153,7 +150,7 @@ int main(int argc, char* argv[])
 							pure8.regs[dest] = (unsigned char)src;
 						else 
 						{
-							printf("Error at %X : no valid register for the destination field of MOV !\n", pure8.pc-2);
+							printf("Error at %X : no valid register for the destination field of LOAD !\n", pure8.pc-2);
 						}
 						break;
 						
@@ -164,7 +161,7 @@ int main(int argc, char* argv[])
 								pure8.regs[dest] = pure8.regs[src];
 						else 
 						{
-							printf("Error at address %X : no valid register for the destination or source field of MOV !\n", pure8.pc-2);
+							printf("Error at address %X : no valid register for the destination or source field of LOAD !\n", pure8.pc-2);
 						}
 						break;
 				}
