@@ -1,4 +1,4 @@
-# pure8
+# pure8 virtual computer
 
 
 ## Goals
