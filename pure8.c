@@ -1,6 +1,6 @@
 /*   DO NOT REMOVE !!!
  *
- *   My pure8 virtual computer
+ *   pure8 virtual computer SemperFis
  *   Copyright (C) 2019 
  *
  *   This program is free software: you can redistribute it and/or modify
@@ -21,20 +21,19 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define REGS_NUM 9
+#define REGS_NUM 0x8
 
 
 /* The pure8 virtual computer system is : 
  * - 64Kb of RAM, 
- * - 8 8bits general-purposes registers (R0 to R7), 
- * - 1 16bits memory-purpose register (M0),
+ * - 8 16bits general-purposes registers (R0 to R7), 
  * - 1 16bits program-counter (PC)
  */
 typedef struct {
 	unsigned char  mem[0x1000];
-	unsigned char  regs[REGS_NUM];
+	unsigned short regs[REGS_NUM];
 	unsigned short pc;
-} _pure8;
+} pure8_t;
 
 
 /* Store the instructions into an Enum to ease the code reading */
@@ -43,15 +42,19 @@ enum intruction_list {
 	HALT = 0xFF,
 	
 	/* LOAD : load an immediate value into a register or copy the content of a register into another register */
-	LOAD = 0x01
+	LOAD = 0x01,
 };
 
 
 /* The pure8 main function that contain all the code, there isn't external function to ease the code reading and support */
 int main(int argc, char* argv[])
 {
-	/* The GNU/GPL license screen, DO NOT REMOVE */
-	printf("\nPure8 Virtual Computer  Copyright (C) 2019 Evan Dondon\nThis program comes with ABSOLUTELY NO WARRANTY;\nThis is free software, and you are welcome to redistribute it\nunder certain conditions;\n\n");
+	/* GNU/GPL License output. DO NOT REMOVE !!! */
+	char* GNU_GPL = 	"\nPure8 Virtual Computer  Copyright (C) 2019 SemperFis\n"
+				"This program comes with ABSOLUTELY NO WARRANTY;\n"
+				"This is free software, and you are welcome to redistribute it\n"
+				"under certain conditions;\n";
+	puts(GNU_GPL);
 	
 	#ifdef DEBUG
 		/* Create the debug file for dev purpose only */
@@ -60,7 +63,7 @@ int main(int argc, char* argv[])
 	
 	
 	/* Create an instance of the pure8 vm & initialize it */
-	_pure8 pure8 = { .mem = { 0 }, .regs = { 0 }, .pc =  0 };
+	pure8_t pure8 = { .mem = { 0 }, .regs = { 0 }, .pc =  0 };
 	
 	
 	/* Test the number of command-line arguments & open the rom file */
@@ -95,12 +98,8 @@ int main(int argc, char* argv[])
 	/* Now, execute the rom content load into the pure8 RAM */
 	
 	/* Declare variable to handle the different instruction field */
-	unsigned char inst = 0xFF;
-	unsigned char conf = 0;
-	unsigned char dest = 0;
-	unsigned char src  = 0;
-	unsigned char tmp  = 0;
-	int run = 1;
+	unsigned char inst, conf, dest_low, dest_high, src_low, src_high =  0;
+	unsigned short tmp = 0, run = 1;
 	
 	#ifdef DEBUG
 		fprintf(debug_file, "\nEXECUTE INSTRUCTION IN THE RAM\n", pure8.pc);
@@ -109,8 +108,8 @@ int main(int argc, char* argv[])
 	while (run)
 	{
 		/* Load the current instruction from the memory location pointed by the pure8 PC */
-		inst = pure8.mem[pure8.pc];
-		
+		inst = pure8.mem[pure8.pc];		
+
 		switch (inst)
 		{
 			case HALT:
@@ -129,16 +128,14 @@ int main(int argc, char* argv[])
 				/* ENCODING : 0x01[CONF][DEST][SRC] */
 				
 				conf = pure8.mem[++pure8.pc];
-				dest = pure8.mem[++pure8.pc];
-				src  = pure8.mem[++pure8.pc];
 				
 				#ifdef DEBUG
-					fprintf(debug_file, "\n>>> LOAD at RAM address %X : CONF : %X; DEST : %X; SRC : %X;\n", (int)pure8.pc, (int)conf, (int)dest, (int)src);
+					fprintf(debug_file, "\n>>> LOAD at RAM address %X\n", (int)pure8.pc);
 				#endif
 				
 				/* CONF(iguration) BYTE : 
-				 * 0x10 -> DEST = REG, SRC = IMM,
-				 * 0x11 -> DEST = REG, SRC = REG,
+				 * 0x10 -> DEST = REG, SRC = IMM;
+				 * 0x11 -> DEST = REG, SRC = REG;
 				 */
 				
 				switch (conf)
@@ -146,23 +143,24 @@ int main(int argc, char* argv[])
 					case 0x10:
 						/* DEST = REG, SRC = IMM */
 						
-						if (dest >= 0x0 && dest < REGS_NUM)
-							pure8.regs[dest] = (unsigned char)src;
-						else 
-						{
-							printf("Error at %X : no valid register for the destination field of LOAD !\n", pure8.pc-2);
-						}
+						dest_high = pure8.mem[++pure8.pc];
+						src_high  = pure8.mem[++pure8.pc];
+						src_low   = pure8.mem[++pure8.pc];
+						
+						/* Concatenate the two char src_low & src_high to make a short */
+						tmp = src_high << 8;
+						tmp = tmp | (unsigned short)src_low;
+
+						pure8.regs[dest_high] = tmp;
 						break;
 						
 					case 0x11:
 						/* DEST = REG, SRC = REG */
-						
-						if (dest >= 0x0 && dest < REGS_NUM && src >= 0x0 && src < REGS_NUM)
-								pure8.regs[dest] = pure8.regs[src];
-						else 
-						{
-							printf("Error at address %X : no valid register for the destination or source field of LOAD !\n", pure8.pc-2);
-						}
+
+						dest_high = pure8.mem[++pure8.pc];
+						src_high  = pure8.mem[++pure8.pc];
+
+						pure8.regs[dest_high] = pure8.regs[src_high];
 						break;
 				}
 				
@@ -177,7 +175,7 @@ int main(int argc, char* argv[])
 		#ifdef DEBUG
 			fprintf(debug_file, "\nREGISTERS DUMP\n\n");
 			for (register int i = 0; i < REGS_NUM; i++)
-				fprintf(debug_file, "REGISTER %d : 0x%X\n", i, (int)pure8.regs[i]);
+				fprintf(debug_file, "REGISTER R%d : 0x%X\n", i, (int)pure8.regs[i]);
 		#endif
 		
 		/* Increment the pure8 PC */
