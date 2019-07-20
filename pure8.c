@@ -21,18 +21,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define REGS_NUM 0x8
-
-
 /* The pure8 virtual computer system is : 
  * - 64Kb of RAM, 
- * - 8 16bits general-purposes registers (R0 to R7), 
+ * - A 8bits stack
  * - 1 16bits program-counter (PC)
  */
 typedef struct {
-	unsigned char  mem[0x1000];
-	unsigned short regs[REGS_NUM];
-	unsigned short pc;
+	unsigned char mem[0x1000];
+	unsigned char stack[0x1000];
+	int pc;
 } pure8_t;
 
 
@@ -40,9 +37,6 @@ typedef struct {
 enum intruction_list {
 	/* HALT : halt the cpu until reset */
 	HALT = 0xFF,
-	
-	/* LOAD : load an immediate value into a register or copy the content of a register into another register */
-	LOAD = 0x01,
 };
 
 
@@ -56,14 +50,9 @@ int main(int argc, char* argv[])
 				"under certain conditions;\n";
 	puts(GNU_GPL);
 	
-	#ifdef DEBUG
-		/* Create the debug file for dev purpose only */
-		FILE* debug_file = fopen("debug.txt", "w+");
-	#endif
-	
 	
 	/* Create an instance of the pure8 vm & initialize it */
-	pure8_t pure8 = { .mem = { 0 }, .regs = { 0 }, .pc =  0 };
+	pure8_t pure8 = { .mem = { 0 }, .stack = { 0 }, .pc = 0 };
 	
 	
 	/* Test the number of command-line arguments & open the rom file */
@@ -98,17 +87,16 @@ int main(int argc, char* argv[])
 	/* Now, execute the rom content load into the pure8 RAM */
 	
 	/* Declare variable to handle the different instruction field */
-	unsigned char inst, conf, dest_low, dest_high, src_low, src_high =  0;
-	unsigned short tmp = 0, run = 1;
+	unsigned char inst, imm, run = 0;
 	
 	#ifdef DEBUG
-		fprintf(debug_file, "\nEXECUTE INSTRUCTION IN THE RAM\n", pure8.pc);
+		fprintf(stderr, "\nEXECUTE INSTRUCTION IN THE RAM\n");
 	#endif
 	
 	while (run)
 	{
 		/* Load the current instruction from the memory location pointed by the pure8 PC */
-		inst = pure8.mem[pure8.pc];		
+		inst = FETCH;
 
 		switch (inst)
 		{
@@ -117,69 +105,24 @@ int main(int argc, char* argv[])
 				/* ENCODING : 0xFF */
 
 				#ifdef DEBUG
-					fprintf(debug_file, "\n>>> HALT at RAM address %X\n", pure8.pc);
+					fprintf(stderr, "\n>>> HALT at RAM address %X\n", pure8.pc);
 				#endif
 				
 				run = 0;
 				break;
-				
-			case LOAD:
-				/* LOAD [DEST] [SRC] | Example : LOAD M0, #0xFF, LOAD R5, M0 */
-				/* ENCODING : 0x01[CONF][DEST][SRC] */
-				
-				conf = pure8.mem[++pure8.pc];
-				
-				#ifdef DEBUG
-					fprintf(debug_file, "\n>>> LOAD at RAM address %X\n", (int)pure8.pc);
-				#endif
-				
-				/* CONF(iguration) BYTE : 
-				 * 0x10 -> DEST = REG, SRC = IMM;
-				 * 0x11 -> DEST = REG, SRC = REG;
-				 */
-				
-				switch (conf)
-				{
-					case 0x10:
-						/* DEST = REG, SRC = IMM */
-						
-						dest_high = pure8.mem[++pure8.pc];
-						src_high  = pure8.mem[++pure8.pc];
-						src_low   = pure8.mem[++pure8.pc];
-						
-						/* Concatenate the two char src_low & src_high to make a short */
-						tmp = src_high << 8;
-						tmp = tmp | (unsigned short)src_low;
 
-						pure8.regs[dest_high] = tmp;
-						break;
-						
-					case 0x11:
-						/* DEST = REG, SRC = REG */
-
-						dest_high = pure8.mem[++pure8.pc];
-						src_high  = pure8.mem[++pure8.pc];
-
-						pure8.regs[dest_high] = pure8.regs[src_high];
-						break;
-				}
-				
-				break;
-				
 			default:
-				printf("Unknown instruction code : 0x%X at ram 0x%X\n", (int)inst, (int)pure8.pc);
+				printf("Unknown instruction code : 0x%X at ram 0x%X\n", inst, pure8.pc);
 				break;
 		}
 		
-		/* Dump all the registers into the debug file */
+		/* Dump the stack into the debug file */
 		#ifdef DEBUG
-			fprintf(debug_file, "\nREGISTERS DUMP\n\n");
-			for (register int i = 0; i < REGS_NUM; i++)
-				fprintf(debug_file, "REGISTER R%d : 0x%X\n", i, (int)pure8.regs[i]);
+			fprintf(stderr, "PC = %X\n", pure8.pc);
+			fprintf(stderr, "STACK DUMP : \n");
+			for (register int i = 0; i < 10; i++)
+				fprintf(debug_file, "STACK 0x%X : 0x%X\n", i, pure8.stack[i]);
 		#endif
-		
-		/* Increment the pure8 PC */
-		pure8.pc++;
 	}
 	
 	/* End of the pure8 virtual computer */
