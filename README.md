@@ -1,11 +1,7 @@
 # pure8 virtual computer
 
-
-## Goals
-- SDL2 output
-- Support all the instruction set
-- Have an assembler & disassembler
-- A great support
-
-### News
-- 11/07/19 : Create the repo & add the source code
+## Architecture
+- pure8 is a stack-based virtual machine
+- 8bits CPU
+- 64 kilo-bytes of RAM
+- 64 kilo-bytes stack byte aligned
