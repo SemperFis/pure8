@@ -21,15 +21,21 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+/* To get the input file size */
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 /* The pure8 virtual computer system is : 
  * - 64Kb of RAM, 
- * - A 8bits stack
- * - 1 16bits program-counter (PC)
+ * - 64Kb of byte-aligned stack,
+ * - 16bits program-counter (PC)
  */
 typedef struct {
-	unsigned char mem[0x1000];
-	unsigned char stack[0x1000];
-	int pc;
+	unsigned char* ram;
+	unsigned char* stack;
+	unsigned short pc;
+	unsigned char run;
 } pure8_t;
 
 
@@ -40,91 +46,143 @@ enum intruction_list {
 };
 
 
+pure8_t* pure8_init(void);
+void pure8_free(pure8_t* s);
+
+void read_file(const char* file, pure8_t* p);
+void pure8_core(pure8_t* vm);
+
+
 /* The pure8 main function that contain all the code, there isn't external function to ease the code reading and support */
 int main(int argc, char* argv[])
 {
 	/* GNU/GPL License output. DO NOT REMOVE !!! */
-	char* GNU_GPL = 	"\nPure8 Virtual Computer  Copyright (C) 2019 SemperFis\n"
-				"This program comes with ABSOLUTELY NO WARRANTY;\n"
-				"This is free software, and you are welcome to redistribute it\n"
-				"under certain conditions;\n";
+	char* GNU_GPL = "\nPure8 Virtual Computer  Copyright (C) 2019 SemperFis\n"
+			"This program comes with ABSOLUTELY NO WARRANTY;\n"
+			"This is free software, and you are welcome to redistribute it\n"
+			"under certain conditions;\n";
 	puts(GNU_GPL);
 	
 	
 	/* Create an instance of the pure8 vm & initialize it */
-	pure8_t pure8 = { .mem = { 0 }, .stack = { 0 }, .pc = 0 };
+	pure8_t* pure8 = pure8_init();
 	
-	
-	/* Test the number of command-line arguments & open the rom file */
-	if (argc != 2)
+	/* Test the number of command-line arguments */
+	if (argc != 2) 
+	{
 		printf("Please use the following syntax : pure8 [binary file]\n");
+		pure8_free(pure8);
+		return -1;
+	}
 	else
 	{
-		/* Open the rom file as a binary */
-		FILE* rom_file = NULL;
-		rom_file = fopen(argv[1], "rb");
-		
-		/* Test if the rom file isn't correctly open */
-		if (rom_file == NULL)
-		{
-			printf("Unable to open %s !\n", argv[1]);
-			exit(-1);
-		}
-		
-		/* Finally, copy the rom content into the pure8 RAM */
-		int i = -1;
-		while ((int)pure8.mem[i] != 0xFF)
-		{
-			i++;
-			fread(&pure8.mem[i], (size_t)1, (size_t)1, rom_file);
-		}
-		
-		/* And close the file */
-		fclose(rom_file);
+		read_file((const char*)argv[1], pure8);
 	}
 	
-	/* -------------------------------------------------------------------- */
-	/* Now, execute the rom content load into the pure8 RAM */
-	
-	/* Declare variable to handle the different instruction field */
-	unsigned char inst, imm, run = 0;
 	
 	#ifdef DEBUG
-		fprintf(stderr, "\nEXECUTE INSTRUCTION IN THE RAM\n");
+		fprintf(stderr, "Start executing instruction...\n");
 	#endif
-	
-	while (run)
-	{
-		/* Load the current instruction from the memory location pointed by the pure8 PC */
-		inst = FETCH;
+	pure8_core(pure8);
 
-		switch (inst)
+
+	#ifdef DEBUG
+		fprintf(stderr, "Free the pure8 instance & exit the program...\n");
+	#endif
+
+	/* Free the pure8 & quit */
+	pure8_free(pure8);
+	return 0;
+}
+
+
+void read_file(const char* file, pure8_t* p)
+{
+	struct stat file_stat;
+
+	if (stat(file, &file_stat) < 0)
+	{
+		fprintf(stderr, "Can't get the size of %s !!!\n", file);
+		exit(-1);
+	}
+
+	#ifdef DEBUG
+		fprintf(stderr, "The size of %s is : %ld byte(s).\n", file, file_stat.st_size);
+	#endif
+
+	FILE* f = fopen(file, "rb");
+	if (!f)
+	{
+		fprintf(stderr, "Can't open %s !!!\n", file);
+		exit(-1);
+	}
+
+	unsigned int size = fread(p->ram, (size_t)1, (size_t)file_stat.st_size, f);
+
+	#ifdef DEBUG
+		fprintf(stderr, "Size of data read by fread() : %d byte(s).\n", size);
+	#endif
+
+	fclose(f);
+}
+
+
+pure8_t* pure8_init(void)
+{
+	pure8_t* s = calloc(1, sizeof(pure8_t));
+
+	if (!s) { goto alloc_failed; }
+
+	s->ram = calloc(0x10000, sizeof(unsigned char));
+	if (!s->ram) { free(s); goto alloc_failed; }
+
+	s->stack = calloc(0x10000, sizeof(unsigned char));
+	if (!s->stack) { free(s->ram); free(s); goto alloc_failed; }
+
+	s->pc  = 0;
+	s->run = 1;
+
+	return s;
+	
+	alloc_failed:
+		fprintf(stderr, "Can't allocate memory for the pure8 instance !!!\n");
+		exit(-1);
+}
+
+
+void pure8_free(pure8_t* s)
+{
+	free(s->stack);
+	free(s->ram);
+	free(s);
+}
+
+
+void pure8_core(pure8_t* vm)
+{
+	unsigned char inst   = HALT;
+	unsigned char h_inst = 0;
+
+	while (vm->run)
+	{
+		inst   = vm->ram[vm->pc];
+		h_inst = inst >> 4;
+
+		switch(inst)
 		{
 			case HALT:
-				/* HALT */
-				/* ENCODING : 0xFF */
+				/* Stop the CPU */
 
 				#ifdef DEBUG
-					fprintf(stderr, "\n>>> HALT at RAM address %X\n", pure8.pc);
+					fprintf(stderr, "HALT at 0x%X\n", vm->pc);
 				#endif
-				
-				run = 0;
+				vm->run = 0;
 				break;
 
 			default:
-				printf("Unknown instruction code : 0x%X at ram 0x%X\n", inst, pure8.pc);
+				fprintf(stderr, "At 0x%X : Unknown instruction : 0x%X !!!\n", vm->pc, inst);
+				vm->run = 0;
 				break;
 		}
-		
-		/* Dump the stack into the debug file */
-		#ifdef DEBUG
-			fprintf(stderr, "PC = %X\n", pure8.pc);
-			fprintf(stderr, "STACK DUMP : \n");
-			for (register int i = 0; i < 10; i++)
-				fprintf(debug_file, "STACK 0x%X : 0x%X\n", i, pure8.stack[i]);
-		#endif
 	}
-	
-	/* End of the pure8 virtual computer */
-	return 0;
 }
